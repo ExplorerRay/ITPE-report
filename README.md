@@ -1,6 +1,8 @@
 # ITPE-report
 ITPE report tool - Used to fetch power info from existing exporter and generate report for perf &amp; energy
 
+This tool currently utilizes Prometheus with Kepler (v0.8.0) as energy data source.
+
 ## Usage
 
 ### Host

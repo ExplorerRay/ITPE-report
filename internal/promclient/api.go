@@ -3,7 +3,6 @@ package promclient
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/prometheus/client_golang/api"
@@ -14,22 +13,45 @@ import (
 // apiClient is a package-level variable to store the Prometheus API client
 var apiClient v1.API
 
-func Init(prometheus_url string) {
+// QueryInfo holds query details
+type QueryInfo struct {
+	Name      string
+	Timestamp time.Time
+}
+
+// QueryResult holds the result of a single Prometheus query
+type QueryResult struct {
+	Name      string            // Query name
+	Metric    model.Metric      // Metric labels (e.g., {container_name="ollama"})
+	Value     model.SampleValue // Sample value
+	Timestamp model.Time        // Sample timestamp
+}
+
+// QueryResponse holds the full response for a query
+type QueryResponse struct {
+	Results  []QueryResult // List of results for the query
+	Warnings []string      // Any warnings from the query
+	Error    error         // Any error from the query
+}
+
+// Init initializes the Prometheus API client with the given URL
+func Init(prometheus_url string) error {
 	client, err := api.NewClient(api.Config{
 		Address: prometheus_url,
 	})
 
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	apiClient = v1.NewAPI(client)
+	return nil
 }
 
-func Query(name string, timestamp time.Time) {
+// Query executes a single Prometheus query and returns structured results
+func Query(name string, timestamp time.Time) QueryResponse {
 	if apiClient == nil {
-		fmt.Println("Prometheus API client is not initialized")
-		os.Exit(1)
+		return QueryResponse{Error: fmt.Errorf("prometheus API client is not initialized")}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -37,17 +59,46 @@ func Query(name string, timestamp time.Time) {
 
 	result, warnings, err := apiClient.Query(ctx, name, timestamp, v1.WithTimeout(2*time.Second))
 	if err != nil {
-		fmt.Printf("Error querying Prometheus: %v\n", err)
-		os.Exit(1)
+		return QueryResponse{Error: fmt.Errorf("querying Prometheus for %s: %v", name, err)}
 	}
-	if len(warnings) > 0 {
-		fmt.Printf("Warnings: %v\n", warnings)
+
+	response := QueryResponse{
+		Warnings: warnings,
 	}
 
 	// Handle vector metric
-	fmt.Println("Vector result:")
-	for _, sample := range result.(model.Vector) {
-		fmt.Printf("  Metric: %v, Value: %v, Timestamp: %v\n",
-			sample.Metric, sample.Value, sample.Timestamp)
+	if vector, ok := result.(model.Vector); ok {
+		if len(vector) == 0 {
+			return response // Empty results
+		}
+		response.Results = make([]QueryResult, len(vector))
+		for i, sample := range vector {
+			response.Results[i] = QueryResult{
+				Name:      name,
+				Metric:    sample.Metric,
+				Value:     sample.Value,
+				Timestamp: sample.Timestamp,
+			}
+		}
+	} else {
+		// Non-vector results (e.g., Scalar, String) not expected, return empty
+		return response
 	}
+
+	return response
+}
+
+// MultiQuery executes multiple Prometheus queries and returns structured results
+func MultiQuery(queries []QueryInfo) []QueryResponse {
+	if apiClient == nil {
+		return []QueryResponse{{
+			Error: fmt.Errorf("prometheus API client is not initialized"),
+		}}
+	}
+
+	responses := make([]QueryResponse, len(queries))
+	for i, q := range queries {
+		responses[i] = Query(q.Name, q.Timestamp)
+	}
+	return responses
 }
