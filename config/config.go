@@ -8,11 +8,13 @@ import (
 
 type Config struct {
 	PrometheusURL string
+	GenAIProfPath string
 }
 
 func DefaultConfig() *Config {
 	return &Config{
 		PrometheusURL: "http://localhost:9090",
+		GenAIProfPath: "profile_export.json",
 	}
 }
 
@@ -23,6 +25,7 @@ func ParseArgs() *Config {
 	config := DefaultConfig()
 
 	app.Flag("prom-url", "Prometheus URL").StringVar(&config.PrometheusURL)
+	app.Flag("genai-prof-path", "Path to GenAI-Perf profile_export.json").StringVar(&config.GenAIProfPath)
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	return config

@@ -48,6 +48,34 @@ func Init(prometheus_url string) error {
 	return nil
 }
 
+func MakeKeplerQueryInfo(timestamp time.Time, containerName string) []QueryInfo {
+	baseQueryList := []string{
+		"kepler_node_platform_joules_total",
+		"kepler_node_gpu_joules_total",
+		"kepler_node_package_joules_total",
+		"kepler_node_dram_joules_total",
+		"kepler_node_other_joules_total",
+		"kepler_container_gpu_joules_total{container_name=\"" + containerName + "\"}",
+		"kepler_container_dram_joules_total{container_name=\"" + containerName + "\"}",
+		"kepler_container_package_joules_total{container_name=\"" + containerName + "\"}",
+		"kepler_container_platform_joules_total{container_name=\"" + containerName + "\"}",
+		"kepler_container_other_joules_total{container_name=\"" + containerName + "\"}",
+	}
+	var queryInfos []QueryInfo
+	for _, q := range baseQueryList {
+		queryInfos = append(queryInfos, QueryInfo{Name: q, Timestamp: timestamp})
+	}
+	return queryInfos
+}
+
+func SumResults(results []QueryResult) float64 {
+	var sum float64
+	for _, res := range results {
+		sum += float64(res.Value)
+	}
+	return sum
+}
+
 // Query executes a single Prometheus query and returns structured results
 func Query(name string, timestamp time.Time) QueryResponse {
 	if apiClient == nil {

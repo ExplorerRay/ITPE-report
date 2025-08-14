@@ -3,11 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/explorerray/itpe-report/config"
+	"github.com/explorerray/itpe-report/internal/client/promclient"
 	"github.com/explorerray/itpe-report/internal/exporter/stdout"
-	"github.com/explorerray/itpe-report/internal/promclient"
+	"github.com/explorerray/itpe-report/internal/input"
 )
 
 func main() {
@@ -19,18 +19,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Define queries
-	queries := []promclient.QueryInfo{
-		{Name: "kepler_container_platform_joules_total{container_name=\"ollama\"}", Timestamp: time.Now().Add(-1 * time.Hour)},
-		{Name: "kepler_container_dram_joules_total{container_name=\"ollama\"}", Timestamp: time.Now().Add(-1 * time.Hour)},
-		{Name: "kepler_container_package_joules_total{container_name=\"ollama\"}", Timestamp: time.Now().Add(-1 * time.Hour)},
-		{Name: "kepler_container_gpu_joules_total{container_name=\"ollama\"}", Timestamp: time.Now().Add(-1 * time.Hour)},
-		{Name: "kepler_node_platform_joules_total", Timestamp: time.Now().Add(-1 * time.Hour)},
+	// Read and process GenAI-Perf JSON
+	profile, err := input.ParseGenAIPerfJSON(c.GenAIProfPath)
+	if err != nil {
+		fmt.Printf("Failed to read profile-export.json: %v\n", err)
+		return
 	}
 
-	// Run queries and get results
-	responses := promclient.MultiQuery(queries)
+	// Compute and display metrics for the first experiment (extend for multiple if needed)
+	if len(profile.Experiments) > 0 {
+		metrics := input.ComputeMetrics(profile.Experiments[0])
+		stdout.MetricsToTableOut(metrics)
+	} else {
+		fmt.Println("No experiments found in profile-export.json")
+	}
 
-	// Print out results in table
-	stdout.QueryToTableOut(queries, responses)
+	// Display metrics for power
+	if len(profile.Experiments) > 0 {
+		powerMetrics := input.GetPowerMetrics(profile.Experiments[0])
+		stdout.PowerMetricsToTableOut(powerMetrics)
+	} else {
+		fmt.Println("No experiments found in profile-export.json")
+	}
 }
