@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	c := config.ParseArgs()
+	c := config.ParseArgsAndConfig()
 
 	// Initialize Prometheus client
 	if err := promclient.Init(c.PrometheusURL); err != nil {
