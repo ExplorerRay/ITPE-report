@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/alecthomas/kingpin/v2"
@@ -48,7 +49,7 @@ func loadGenAIConf(path string) (*GenAIPerf, error) {
 	return &gaip, nil
 }
 
-func ParseArgsAndConfig() *Config {
+func ParseArgsAndConfig(logger *slog.Logger) *Config {
 	const appName = "itpe-report"
 	app := kingpin.New(appName, "ITPE report tool - Used to fetch power info from existing exporter and generate report for perf & energy")
 
@@ -59,7 +60,7 @@ func ParseArgsAndConfig() *Config {
 
 	gaip, err := loadGenAIConf(config.GenAIConfPath)
 	if err != nil {
-		fmt.Printf("Warning: failed to load GenAIPerf config: %v\n", err)
+		logger.Error("Failed to load GenAI-Perf config", "error", err)
 		return config
 	}
 	config.GenAIPerf = *gaip
