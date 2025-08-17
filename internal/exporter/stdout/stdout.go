@@ -58,7 +58,7 @@ func QueryToTableOut(qs []promclient.QueryInfo, qrs []promclient.QueryResponse) 
 	fmt.Println()
 }
 
-func MetricsToTableOut(metrics input.GenAIPerfMetrics) {
+func PerfMetricsToTableOut(metrics input.GenAIPerfMetrics) {
 	// Create a table
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)

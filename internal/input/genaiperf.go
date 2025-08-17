@@ -4,6 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
+
+	"github.com/explorerray/itpe-report/config"
 )
 
 // ProfileExport represents the structure of the GenAI-Perf profile-export.json
@@ -34,6 +38,16 @@ type Request struct {
 	ResponseOutputs    []struct {
 		Response string `json:"response"`
 	} `json:"response_outputs"`
+}
+
+// GenAIPerf config for specific experiment
+type GenAIPerfExpConf struct {
+	Model       string
+	PMSize      int // Parameter size (unit: billion parameters)
+	InputMean   int
+	OutputMean  int
+	Concurrency int
+	RunCount    int
 }
 
 // GenAIPerfMetrics holds computed metrics from the profile
@@ -135,4 +149,71 @@ func ComputeMetrics(exp Experiment) GenAIPerfMetrics {
 	}
 
 	return metrics
+}
+
+func GenJSONPaths(config config.Config) ([]string, error) {
+	// Use config.GenAIPerf and concate config.GenAIArtfPath
+	// example: $(model)-$(inputMean)-$(outputMean)-concurrency$(concurrency)/$(RunCount)_$(concurrency)_profile.json
+
+	paths := []string{}
+	gp := config.GenAIPerf
+	tc := gp.TokenConfs
+	tci := tc.Input
+	tco := tc.Output
+
+	if config.GenAIArtfDir == "" {
+		return nil, fmt.Errorf("artifacts directory is empty")
+	}
+	if len(gp.Models) == 0 {
+		return nil, fmt.Errorf("no models specified in GenAIPerf")
+	}
+	if len(gp.Concurrency) == 0 {
+		return nil, fmt.Errorf("no concurrency values specified in GenAIPerf")
+	}
+	if len(gp.Requests.RunCount) == 0 {
+		return nil, fmt.Errorf("no run counts specified in GenAIPerf")
+	}
+	if len(tci) == 0 || len(tco) == 0 {
+		return nil, fmt.Errorf("no input or output token configurations specified in GenAIPerf")
+	}
+
+	for _, model := range gp.Models {
+		for _, i := range tci {
+			for _, o := range tco {
+				for _, concurrency := range gp.Concurrency {
+					for _, runCount := range gp.Requests.RunCount {
+						path := fmt.Sprintf("%s/%s-%d-%d-concurrency%d/%d_%d_profile.json",
+							config.GenAIArtfDir, model, i.Mean, o.Mean, concurrency, runCount, concurrency)
+						paths = append(paths, path)
+					}
+				}
+			}
+		}
+	}
+	return paths, nil
+}
+
+func GetConfFromPath(path string) (GenAIPerfExpConf, error) {
+	var ec GenAIPerfExpConf
+	// Example path: $(model)-$(inputMean)-$(outputMean)-concurrency$(concurrency)/$(RunCount)_$(concurrency)_profile.json
+	// Split by '/' and then by '-'
+	parts := strings.Split(path, "/")
+	if len(parts) < 2 {
+		return ec, fmt.Errorf("invalid path format: %s", path)
+	}
+
+	dirName := strings.Split(parts[len(parts)-2], "-")
+	if len(dirName) < 4 {
+		return ec, fmt.Errorf("invalid directory name in path: %s", parts[len(parts)-2])
+	}
+
+	modelParts := strings.Split(dirName[0], ":")
+	ec.Model = modelParts[0]
+	ec.PMSize, _ = strconv.Atoi(strings.TrimSuffix(modelParts[1], "b"))
+	ec.InputMean, _ = strconv.Atoi(dirName[1])
+	ec.OutputMean, _ = strconv.Atoi(dirName[2])
+	ec.Concurrency, _ = strconv.Atoi(strings.TrimPrefix(dirName[3], "concurrency"))
+	ec.RunCount, _ = strconv.Atoi(strings.Split(parts[len(parts)-1], "_")[0])
+
+	return ec, nil
 }
