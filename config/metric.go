@@ -6,6 +6,20 @@ type metricConfig struct {
 	Filename string
 }
 
+type YPlot struct {
+	// perf
+	RequestThroughput     float64
+	OutputTokenThroughput float64
+	AvgRequestLatencyMs   float64
+	AvgTTFTMs             float64
+	AvgITLMs              float64
+	// power
+	NodePlatformJ  float64
+	NodeGPUJ       float64
+	NodeCPUJ       float64
+	EnergyPerToken float64
+}
+
 // GetMetricsConfig returns the configuration for all metrics
 func GetMetricsConfig() map[string]metricConfig {
 	return map[string]metricConfig{
@@ -33,9 +47,13 @@ func GetMetricsConfig() map[string]metricConfig {
 			YLabel:   "Joules",
 			Filename: "node_pltf_energy",
 		},
-		"Pod Platform": {
+		"Node GPU": {
 			YLabel:   "Joules",
-			Filename: "pod_pltf_energy",
+			Filename: "node_gpu_energy",
+		},
+		"Node CPU": {
+			YLabel:   "Joules",
+			Filename: "node_cpu_energy",
 		},
 		"Energy Per Token": {
 			YLabel:   "Joules per Token",

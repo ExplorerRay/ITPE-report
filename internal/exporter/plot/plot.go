@@ -15,30 +15,13 @@ import (
 	"gonum.org/v1/plot/vg"
 )
 
-type yPlot struct {
-	// perf
-	RequestThroughput     float64
-	OutputTokenThroughput float64
-	AvgRequestLatencyMs   float64
-	AvgTTFTMs             float64
-	AvgITLMs              float64
-	// power
-	NodePlatformJ  float64
-	PodPlatformJ   float64
-	EnergyPerToken float64
-}
-
 func CreatePlotsSubdir(conf config.Config) string {
 	plotDir := filepath.Join(conf.GenAIArtfDir, "plots")
-	err := os.MkdirAll(filepath.Join(plotDir, "by_model"), os.ModePerm)
-	if err != nil {
-		fmt.Printf("Failed to create plot directory: %v\n", err)
-		os.Exit(1)
+	if err := os.MkdirAll(filepath.Join(plotDir, "by_model"), os.ModePerm); err != nil {
+		panic(err)
 	}
-	err = os.MkdirAll(filepath.Join(plotDir, "by_length"), os.ModePerm)
-	if err != nil {
-		fmt.Printf("Failed to create plot directory: %v\n", err)
-		os.Exit(1)
+	if err := os.MkdirAll(filepath.Join(plotDir, "by_length"), os.ModePerm); err != nil {
+		panic(err)
 	}
 	return plotDir
 }
@@ -85,13 +68,15 @@ func getDistinctModels(emp input.ExpMetricPair) []string {
 }
 
 // collectMetricData gathers metric data for all models and input/output lengths
-func collectMetricData(emp input.ExpMetricPair) (MetricByLengthData, MetricByModelData, []float64, error) {
+func collectMetricData(emp input.ExpMetricPair) (MetricByLengthData, MetricByModelData, []float64, []int, []int, error) {
 	// Step 1: Collect data by lengthKey, modelGroup, and concurrency
 	type metricValues struct {
 		concurrency int
-		values      yPlot
+		values      config.YPlot
 	}
 	dataByLengthAndModel := make(map[lengthKey]map[modelGroup][]metricValues)
+	inputMeans := make(map[int]bool)
+	outputMeans := make(map[int]bool)
 	for ec, mp := range emp {
 		lk := lengthKey{inputMean: ec.InputMean, outputMean: ec.OutputMean}
 		mg := modelGroup{model: ec.Model, pmSize: ec.PMSize}
@@ -100,17 +85,20 @@ func collectMetricData(emp input.ExpMetricPair) (MetricByLengthData, MetricByMod
 		}
 		dataByLengthAndModel[lk][mg] = append(dataByLengthAndModel[lk][mg], metricValues{
 			concurrency: ec.Concurrency,
-			values: yPlot{
+			values: config.YPlot{
 				RequestThroughput:     mp.PerfM.RequestThroughput,
 				OutputTokenThroughput: mp.PerfM.OutputTokenThroughput,
 				AvgRequestLatencyMs:   mp.PerfM.AvgRequestLatencyMs,
 				AvgTTFTMs:             mp.PerfM.AvgTTFTMs,
 				AvgITLMs:              mp.PerfM.AvgITLMs,
 				NodePlatformJ:         mp.PowerM.NodePlatformJ,
-				PodPlatformJ:          mp.PowerM.PodPlatformJ,
+				NodeGPUJ:              mp.PowerM.NodeGPUJ,
+				NodeCPUJ:              mp.PowerM.NodePackageJ,
 				EnergyPerToken:        mp.PowerM.NodePlatformJ / float64(mp.PerfM.TotalOutputTokens),
 			},
 		})
+		inputMeans[ec.InputMean] = true
+		outputMeans[ec.OutputMean] = true
 	}
 
 	// Step 2: Collect all unique Concurrency values
@@ -127,7 +115,7 @@ func collectMetricData(emp input.ExpMetricPair) (MetricByLengthData, MetricByMod
 		}
 	}
 	if len(allConcurrencies) == 0 {
-		return nil, nil, nil, fmt.Errorf("no data found in emp")
+		return nil, nil, nil, nil, nil, fmt.Errorf("no data found in emp")
 	}
 	sort.Ints(allConcurrencies)
 	xValues := make([]float64, len(allConcurrencies))
@@ -135,7 +123,18 @@ func collectMetricData(emp input.ExpMetricPair) (MetricByLengthData, MetricByMod
 		xValues[i] = float64(c)
 	}
 
-	// Step 3: Organize data by metric, lengthKey, and modelGroup (for createMetricPlotByModel)
+	// Step 3: Collect unique InputMean and OutputMean values
+	var uniqueInputMeans, uniqueOutputMeans []int
+	for im := range inputMeans {
+		uniqueInputMeans = append(uniqueInputMeans, im)
+	}
+	for om := range outputMeans {
+		uniqueOutputMeans = append(uniqueOutputMeans, om)
+	}
+	sort.Ints(uniqueInputMeans)
+	sort.Ints(uniqueOutputMeans)
+
+	// Step 4: Organize data by metric, lengthKey, and modelGroup (for createMetricPlotByModel)
 	metricsByLength := make(MetricByLengthData)
 	// Also organize by metric, modelGroup, and lengthKey (for createMetricPlotByLength)
 	metricsByModel := make(MetricByModelData)
@@ -181,8 +180,10 @@ func collectMetricData(emp input.ExpMetricPair) (MetricByLengthData, MetricByMod
 						yValues[idx] = mv.values.AvgITLMs
 					case "Node Platform":
 						yValues[idx] = mv.values.NodePlatformJ
-					case "Pod Platform":
-						yValues[idx] = mv.values.PodPlatformJ
+					case "Node GPU":
+						yValues[idx] = mv.values.NodeGPUJ
+					case "Node CPU":
+						yValues[idx] = mv.values.NodeCPUJ
 					case "Energy Per Token":
 						yValues[idx] = mv.values.EnergyPerToken
 					}
@@ -192,36 +193,55 @@ func collectMetricData(emp input.ExpMetricPair) (MetricByLengthData, MetricByMod
 			}
 		}
 	}
-	return metricsByLength, metricsByModel, xValues, nil
+	return metricsByLength, metricsByModel, xValues, uniqueInputMeans, uniqueOutputMeans, nil
 }
 
-// createMetricPlotByModel generates a plot for a metric, grouped by PMSize and input/output length
-func createMetricPlotByModel(metricName string, pmSize int, lk lengthKey, dataByModel map[modelGroup][]float64, xValues []float64, plotDir string) error {
+// createMetricPlotByModel generates a plot for a metric, grouped by PMSize and either InputMean or OutputMean
+func createMetricPlotByModel(metricName string, pmSize int, groupBy string, groupValue int, dataByLength map[lengthKey]map[modelGroup][]float64, xValues []float64, plotDir string) error {
 	config, exists := config.GetMetricsConfig()[metricName]
 	if !exists {
 		return fmt.Errorf("unknown metric: %s", metricName)
 	}
 
+	var title, filename string
+	if groupBy == "input" {
+		title = fmt.Sprintf("%s (%db Parameters, Input %d)", metricName, pmSize, groupValue)
+		filename = fmt.Sprintf("by_model/%s_%db_input%d.png", config.Filename, pmSize, groupValue)
+	} else {
+		title = fmt.Sprintf("%s (%db Parameters, Output %d)", metricName, pmSize, groupValue)
+		filename = fmt.Sprintf("by_model/%s_%db_output%d.png", config.Filename, pmSize, groupValue)
+	}
+
 	p := plot.New()
-	p.Title.Text = fmt.Sprintf("%s (%db Parameters, Input %d, Output %d)", metricName, pmSize, lk.inputMean, lk.outputMean)
+	p.Title.Text = title
 	p.X.Label.Text = "Concurrency"
 	p.Y.Label.Text = config.YLabel
 
 	args := []interface{}{}
-	for mg, yValues := range dataByModel {
-		if mg.pmSize != pmSize {
+	for lk, modelData := range dataByLength {
+		if (groupBy == "input" && lk.inputMean != groupValue) || (groupBy == "output" && lk.outputMean != groupValue) {
 			continue
 		}
-		args = append(args, mg.model, genPlotterXY(xValues, yValues))
+		for mg, yValues := range modelData {
+			if mg.pmSize != pmSize {
+				continue
+			}
+			var label string
+			if groupBy == "input" {
+				label = fmt.Sprintf("%s-output%d", mg.model, lk.outputMean)
+			} else {
+				label = fmt.Sprintf("%s-input%d", mg.model, lk.inputMean)
+			}
+			args = append(args, label, genPlotterXY(xValues, yValues))
+		}
 	}
 	if len(args) == 0 {
-		return fmt.Errorf("no data for metric %s, PMSize %db, Input %d, Output %d", metricName, pmSize, lk.inputMean, lk.outputMean)
+		return fmt.Errorf("no data for metric %s, PMSize %db, %s %d", metricName, pmSize, groupBy, groupValue)
 	}
 	if err := plotutil.AddLinePoints(p, args...); err != nil {
 		return fmt.Errorf("failed to add line points for %s: %v", metricName, err)
 	}
 
-	filename := fmt.Sprintf("by_model/%s_%db_%d_%d.png", config.Filename, pmSize, lk.inputMean, lk.outputMean)
 	filepath := filepath.Join(plotDir, filename)
 	if err := p.Save(4*vg.Inch, 4*vg.Inch, filepath); err != nil {
 		return fmt.Errorf("failed to save plot %s: %v", filepath, err)
@@ -263,12 +283,12 @@ func createMetricPlotByLength(metricName string, mg modelGroup, dataByLength map
 
 // GeneratePlots coordinates plot generation
 func GeneratePlots(emp input.ExpMetricPair, plotDir string) error {
-	metricsByLength, metricsByModel, xValues, err := collectMetricData(emp)
+	metricsByLength, metricsByModel, xValues, inputMeans, outputMeans, err := collectMetricData(emp)
 	if err != nil {
 		return fmt.Errorf("failed to collect metric data: %v", err)
 	}
 
-	// Original functionality: Plots by PMSize and input/output length
+	// Original functionality: Plots by PMSize and either InputMean or OutputMean
 	for metricName, dataByLength := range metricsByLength {
 		// Group by pmSize
 		byPMSize := make(map[int]map[lengthKey]map[modelGroup][]float64)
@@ -283,9 +303,16 @@ func GeneratePlots(emp input.ExpMetricPair, plotDir string) error {
 				byPMSize[mg.pmSize][lk][mg] = modelData[mg]
 			}
 		}
-		for pmSize, lengthData := range byPMSize {
-			for lk, dataByModel := range lengthData {
-				if err := createMetricPlotByModel(metricName, pmSize, lk, dataByModel, xValues, plotDir); err != nil {
+		for pmSize := range byPMSize {
+			// Plots grouped by InputMean
+			for _, inputMean := range inputMeans {
+				if err := createMetricPlotByModel(metricName, pmSize, "input", inputMean, dataByLength, xValues, plotDir); err != nil {
+					return err
+				}
+			}
+			// Plots grouped by OutputMean
+			for _, outputMean := range outputMeans {
+				if err := createMetricPlotByModel(metricName, pmSize, "output", outputMean, dataByLength, xValues, plotDir); err != nil {
 					return err
 				}
 			}
