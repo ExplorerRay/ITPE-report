@@ -25,7 +25,7 @@ func main() {
 	logger.Info("Experiment metrics parsed")
 	// Gen plots into png
 	plotDir := plot.CreatePlotsSubdir(*c)
-	if err := plot.GeneratePlots(emp, plotDir); err != nil {
+	if err := plot.GeneratePlots(emp, plotDir, logger); err != nil {
 		logger.Error("Failed to generate plots", "error", err)
 		os.Exit(1)
 	}
