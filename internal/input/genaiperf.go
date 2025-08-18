@@ -91,7 +91,6 @@ func ComputeMetrics(exp Experiment) GenAIPerfMetrics {
 	metrics := GenAIPerfMetrics{
 		Concurrency:  exp.Experiment.Value,
 		TotalTimeSec: float64(expEnd-expBegin) / 1e9,
-		NumRequests:  len(reqs),
 	}
 
 	// Extract model from first payload
@@ -106,12 +105,15 @@ func ComputeMetrics(exp Experiment) GenAIPerfMetrics {
 
 	var sumTTFT, sumRequestLatency, sumITL float64
 	var totalOutputTokens, numITLIntervals int
+	var availReqNum int
 
 	for _, req := range reqs {
-		if len(req.ResponseTimestamps) == 0 {
+		if len(req.ResponseTimestamps) <= 2 {
+			// the response is not available
 			continue
 		}
 
+		availReqNum++
 		reqBegin := req.Timestamp
 		reqEnd := req.ResponseTimestamps[len(req.ResponseTimestamps)-1]
 
@@ -140,10 +142,11 @@ func ComputeMetrics(exp Experiment) GenAIPerfMetrics {
 		}
 	}
 
-	if metrics.NumRequests > 0 {
-		metrics.AvgTTFTMs = sumTTFT / float64(metrics.NumRequests)
-		metrics.AvgRequestLatencyMs = sumRequestLatency / float64(metrics.NumRequests)
-		metrics.RequestThroughput = float64(metrics.NumRequests) / metrics.TotalTimeSec
+	if availReqNum > 0 {
+		metrics.NumRequests = availReqNum
+		metrics.AvgTTFTMs = sumTTFT / float64(availReqNum)
+		metrics.AvgRequestLatencyMs = sumRequestLatency / float64(availReqNum)
+		metrics.RequestThroughput = float64(availReqNum) / metrics.TotalTimeSec
 		metrics.TotalOutputTokens = totalOutputTokens
 		metrics.OutputTokenThroughput = float64(totalOutputTokens) / metrics.TotalTimeSec
 	}
