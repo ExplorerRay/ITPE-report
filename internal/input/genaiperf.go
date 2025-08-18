@@ -83,7 +83,7 @@ func ParseGenAIPerfJSON(filename string, logger *slog.Logger) (*ProfileExport, e
 }
 
 // ComputeMetrics computes performance metrics from an experiment
-func ComputeMetrics(exp Experiment) GenAIPerfMetrics {
+func ComputeMetrics(exp Experiment, ec GenAIPerfExpConf, logger *slog.Logger) GenAIPerfMetrics {
 	reqs := exp.Requests
 	lastReq := reqs[len(reqs)-1]
 	expBegin := reqs[0].Timestamp
@@ -142,6 +142,10 @@ func ComputeMetrics(exp Experiment) GenAIPerfMetrics {
 		}
 	}
 
+	if availReqNum != ec.RunCount {
+		logger.Warn("Number of available requests does not match expected count", "expected", ec.RunCount, "actual", availReqNum,
+			"model", metrics.Model, "input", ec.InputMean, "output", ec.OutputMean, "concurrency", ec.Concurrency)
+	}
 	if availReqNum > 0 {
 		metrics.NumRequests = availReqNum
 		metrics.AvgTTFTMs = sumTTFT / float64(availReqNum)

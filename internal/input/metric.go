@@ -37,7 +37,7 @@ func GenExpMetricPair(c config.Config, logger *slog.Logger) ExpMetricPair {
 		}
 
 		// Only one experiment in Custom GenAIPerf
-		pfm := ComputeMetrics(profile.Experiments[0])
+		pfm := ComputeMetrics(profile.Experiments[0], ec, logger)
 		pwm := GetPowerMetrics(profile.Experiments[0])
 
 		expMetricsPair[ec] = ExpMetrics{
