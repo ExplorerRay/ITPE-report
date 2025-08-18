@@ -3,6 +3,7 @@ package input
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -65,14 +66,16 @@ type GenAIPerfMetrics struct {
 }
 
 // ParseGenAIPerfJSON reads and parses the profile-export.json file
-func ParseGenAIPerfJSON(filename string) (*ProfileExport, error) {
+func ParseGenAIPerfJSON(filename string, logger *slog.Logger) (*ProfileExport, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
+		logger.Error("Failed to read GenAI-Perf JSON file", "file", filename, "error", err)
 		return nil, fmt.Errorf("reading file %s: %v", filename, err)
 	}
 
 	var profile ProfileExport
 	if err := json.Unmarshal(data, &profile); err != nil {
+		logger.Error("Failed to parse GenAI-Perf JSON file", "file", filename, "error", err)
 		return nil, fmt.Errorf("parsing JSON from %s: %v", filename, err)
 	}
 

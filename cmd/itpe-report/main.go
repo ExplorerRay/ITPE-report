@@ -21,7 +21,7 @@ func main() {
 	}
 
 	// Read & parse GenAIperf json, then generate experiment metrics mapping
-	emp := input.GenExpMetricPair(*c)
+	emp := input.GenExpMetricPair(*c, logger)
 	logger.Info("Experiment metrics parsed")
 	// Gen plots into png
 	plotDir := plot.CreatePlotsSubdir(*c)
