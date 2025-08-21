@@ -11,59 +11,56 @@ import (
 
 type (
 	Config struct {
-		PrometheusURL string
-		GenAIPerf     GenAIPerf
-		GenAIConfPath string
-		GenAIProfPath string
-		GenAIArtfDir  string
+		ConfigPath string
+		ReportConf ReportConf `yaml:"itpe_report"`
+		GenAIPerf  GenAIPerf  `yaml:"itpe_perf"`
 	}
 )
 
 func DefaultConfig() *Config {
 	return &Config{
-		PrometheusURL: "http://localhost:9090",
-		GenAIConfPath: "config.yml",
-		GenAIProfPath: "profile_export.json",
-		GenAIArtfDir:  "/artifacts",
+		ConfigPath: "config.yaml",
+		ReportConf: ReportConf{
+			PrometheusURL: "http://localhost:9090",
+			ArtfDir:       "/artifacts",
+		},
+		GenAIPerf: GenAIPerf{
+			EndpointURL: "http://localhost:8000",
+		},
 	}
 }
 
 func RegisterFlags(app *kingpin.Application, config *Config) {
-	app.Flag("prom-url", "Prometheus URL").StringVar(&config.PrometheusURL)
-	app.Flag("genai-conf-path", "Path to GenAI-Perf config.yml").StringVar(&config.GenAIConfPath)
-	app.Flag("genai-prof-path", "Path to GenAI-Perf profile_export.json").StringVar(&config.GenAIProfPath)
-	app.Flag("genai-artf-dir", "Path to GenAI-Perf artifacts directory").StringVar(&config.GenAIArtfDir)
+	app.Flag("config", "Path to config file").StringVar(&config.ConfigPath)
 }
 
-func loadGenAIConf(path string) (*GenAIPerf, error) {
+func loadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read YAML config file %s: %v", path, err)
+		return nil, fmt.Errorf("failed to read YAML file %s: %v", path, err)
 	}
 
-	var gaip GenAIPerf
-	if err := yaml.Unmarshal(data, &gaip); err != nil {
-		return nil, fmt.Errorf("failed to parse YAML config file %s: %v", path, err)
+	var conf Config
+	if err := yaml.Unmarshal(data, &conf); err != nil {
+		return nil, fmt.Errorf("failed to parse YAML file %s: %v", path, err)
 	}
-
-	return &gaip, nil
+	return &conf, nil
 }
 
 func ParseArgsAndConfig(logger *slog.Logger) *Config {
 	const appName = "itpe-report"
-	app := kingpin.New(appName, "ITPE report tool - Used to fetch power info from existing exporter and generate report for perf & energy")
+	app := kingpin.New(appName, "ITPE report tool - Used to generate report for inference perf & energy")
 
 	config := DefaultConfig()
 
 	RegisterFlags(app, config)
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
-	gaip, err := loadGenAIConf(config.GenAIConfPath)
+	config, err := loadConfig(config.ConfigPath)
 	if err != nil {
-		logger.Error("Failed to load GenAI-Perf config", "error", err)
-		return config
+		logger.Error("Failed to load config", "error", err)
+		return DefaultConfig()
 	}
-	config.GenAIPerf = *gaip
 
 	return config
 }

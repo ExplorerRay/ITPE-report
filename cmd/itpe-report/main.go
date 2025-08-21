@@ -15,13 +15,17 @@ func main() {
 	c := config.ParseArgsAndConfig(logger)
 
 	// Initialize Prometheus client
-	if err := promclient.Init(c.PrometheusURL); err != nil {
+	if err := promclient.Init(c.ReportConf.PrometheusURL); err != nil {
 		logger.Error("Failed to initialize Prometheus client", "error", err)
 		os.Exit(1)
 	}
 
 	// Read & parse GenAIperf json, then generate experiment metrics mapping
-	emp := input.GenExpMetricPair(*c, logger)
+	emp, err := input.GenExpMetricPair(*c, logger)
+	if err != nil {
+		logger.Error("Failed to parse experiment metrics", "error", err)
+		os.Exit(1)
+	}
 	logger.Info("Experiment metrics parsed")
 	// Gen plots into png
 	plotDir := plot.CreatePlotsSubdir(*c)

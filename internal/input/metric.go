@@ -13,14 +13,14 @@ type ExpMetrics struct {
 
 type ExpMetricPair map[GenAIPerfExpConf]ExpMetrics
 
-func GenExpMetricPair(c config.Config, logger *slog.Logger) ExpMetricPair {
+func GenExpMetricPair(c config.Config, logger *slog.Logger) (ExpMetricPair, error) {
 	// Mapping plot name (model_inputMean_outputMean) to a list of MetricPair
 	// One plot would have #concurrency metric
 	expMetricsPair := make(ExpMetricPair)
 
 	paths, err := GenJSONPaths(c)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	// logging how many files need to parse
@@ -28,12 +28,12 @@ func GenExpMetricPair(c config.Config, logger *slog.Logger) ExpMetricPair {
 	for _, path := range paths {
 		profile, err := ParseGenAIPerfJSON(path, logger)
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 
 		ec, err := GetConfFromPath(path)
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 
 		// Only one experiment in Custom GenAIPerf
@@ -46,5 +46,5 @@ func GenExpMetricPair(c config.Config, logger *slog.Logger) ExpMetricPair {
 		}
 	}
 
-	return expMetricsPair
+	return expMetricsPair, nil
 }

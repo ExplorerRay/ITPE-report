@@ -162,7 +162,7 @@ func ComputeMetrics(exp Experiment, ec GenAIPerfExpConf, logger *slog.Logger) Ge
 }
 
 func GenJSONPaths(config config.Config) ([]string, error) {
-	// Use config.GenAIPerf and concate config.GenAIArtfPath
+	// Use config.GenAIPerf and concate config.ReportConf.GenAIArtfPath
 	// example: $(model)-$(inputMean)-$(outputMean)-concurrency$(concurrency)/$(RunCount)_$(concurrency)_profile.json
 
 	paths := []string{}
@@ -171,7 +171,7 @@ func GenJSONPaths(config config.Config) ([]string, error) {
 	tci := tc.Input
 	tco := tc.Output
 
-	if config.GenAIArtfDir == "" {
+	if config.ReportConf.ArtfDir == "" {
 		return nil, fmt.Errorf("artifacts directory is empty")
 	}
 	if len(gp.Models) == 0 {
@@ -193,7 +193,7 @@ func GenJSONPaths(config config.Config) ([]string, error) {
 				for _, concurrency := range gp.Concurrency {
 					for _, runCount := range gp.Requests.RunCount {
 						path := fmt.Sprintf("%s/%s-%d-%d-concurrency%d/%d_%d_profile.json",
-							config.GenAIArtfDir, model, i.Mean, o.Mean, concurrency, runCount, concurrency)
+							config.ReportConf.ArtfDir, model, i.Mean, o.Mean, concurrency, runCount, concurrency)
 						paths = append(paths, path)
 					}
 				}

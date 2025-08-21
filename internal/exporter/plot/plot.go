@@ -17,7 +17,7 @@ import (
 
 // CreatePlotsSubdir creates the necessary subdirectories for saving plot images.
 func CreatePlotsSubdir(conf config.Config) string {
-	plotDir := filepath.Join(conf.GenAIArtfDir, "plots")
+	plotDir := filepath.Join(conf.ReportConf.ArtfDir, "plots")
 	if err := os.MkdirAll(filepath.Join(plotDir, "by_model"), os.ModePerm); err != nil {
 		panic(err)
 	}
