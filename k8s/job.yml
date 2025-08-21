@@ -1,0 +1,43 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: itpe
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: itpe-report-job
+spec:
+  ttlSecondsAfterFinished: 5
+  template:
+    spec:
+      initContainers:
+      # gen perf metrics before gen report
+        - name: itpe-perf-container
+          image: explorerray/itpe-perf
+          volumeMounts:
+            - name: results-volume
+              mountPath: /artifacts
+            - name: config-volume
+              mountPath: /aiperf
+              readOnly: true
+      containers:
+        - name: itpe-report-container
+          image: explorerray/itpe-report
+          command: ['/bin/sh', '-c', '/usr/bin/itpe-report --config /itpe/config.yml']
+          volumeMounts:
+            - name: results-volume
+              mountPath: /artifacts
+            - name: config-volume
+              mountPath: /itpe
+              readOnly: true
+      restartPolicy: Never
+      volumes:
+        - name: results-volume
+          hostPath:
+            path: /mnt/artifacts
+            type: DirectoryOrCreate
+        - name: config-volume
+          configMap:
+            name: itpe-config

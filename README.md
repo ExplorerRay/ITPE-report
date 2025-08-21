@@ -14,3 +14,13 @@ This tool currently utilizes Prometheus with Kepler (v0.8.0) as energy data sour
 1. `docker build -t itpe-report .`
 2. Check help message with `docker run --rm itpe-report --help`
 3. Run the application with `docker run --rm itpe-report <args>`
+
+### K8S
+Revise `hack/config.yml` as needed.
+
+```bash
+kubectl apply -f k8s/job.yml
+
+kubectl create -n itpe cm itpe-config --from-file hack/config.yml -o yaml --dry-run=client > k8s/cm.yml
+kubectl apply -f k8s/cm.yml
+```
