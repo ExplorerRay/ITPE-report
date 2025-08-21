@@ -8,6 +8,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: itpe-report-job
+  namespace: itpe
 spec:
   ttlSecondsAfterFinished: 5
   template:
